@@ -494,7 +494,12 @@ fn main() -> ! {
                             .unwrap();
                             // let _ = serial.write(text.as_bytes());
 
-                            fill_grid_pixels(&state, &mut matrix);
+                            // StageGreyCol only fills the staging buffer, nothing visible
+                            // changes. Redrawing (~17 ms of I2C) after each of the 9 columns
+                            // capped host-streamed greyscale at ~6 fps.
+                            if !matches!(command, Command::StageGreyCol(..)) {
+                                fill_grid_pixels(&state, &mut matrix);
+                            }
                         }
                         (None, _) => {}
                     }
