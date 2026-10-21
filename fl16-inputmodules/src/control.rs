@@ -83,6 +83,8 @@ pub enum PatternVals {
     FullBrightness = 0x05,
     DisplayPanic = 0x06,
     DisplayLotus2 = 0x07,
+    /// Firmware-rendered plasma, runs until a drawing command
+    Plasma = 0x08,
 }
 
 pub enum Game {
@@ -319,6 +321,7 @@ pub fn parse_module_command(count: usize, buf: &[u8]) -> Option<Command> {
                 Some(PatternVals::DisplayLotus2) => {
                     Some(Command::Pattern(PatternVals::DisplayLotus2))
                 }
+                Some(PatternVals::Plasma) => Some(Command::Pattern(PatternVals::Plasma)),
                 None => None,
             },
             Some(CommandVals::Animate) => Some(if let Some(run_animation) = arg {
@@ -546,6 +549,11 @@ pub fn handle_command(
                 }
                 PatternVals::DisplayPanic => state.grid = display_panic(),
                 PatternVals::DisplayLotus2 => state.grid = display_lotus2(),
+                PatternVals::Plasma => {
+                    state.upcoming_frames = Some(crate::animations::Animation::Plasma(
+                        crate::animations::PlasmaIterator::new(random),
+                    ))
+                }
                 _ => {}
             }
             None

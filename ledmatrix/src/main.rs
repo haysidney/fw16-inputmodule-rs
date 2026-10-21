@@ -114,8 +114,6 @@ use fl16_inputmodules::animations::*;
 use fl16_inputmodules::fl16::DVT2_CALC_PIXEL;
 #[cfg(feature = "evt")]
 use fl16_inputmodules::fl16::EVT_CALC_PIXEL;
-use fl16_inputmodules::games::pong_animation::*;
-use fl16_inputmodules::games::snake_animation::*;
 use fl16_inputmodules::{games::game_of_life, led_hal as bsp};
 //use rp_pico as bsp;
 // use sparkfun_pro_micro_rp2040 as bsp;
@@ -234,7 +232,7 @@ fn main() -> ! {
         grid: percentage(0),
         col_buffer: Grid::default(),
         animate: false,
-        brightness: 51, // Default to 51/255 = 20% brightness
+        brightness: 21, // fwled-ambient's level at keyboard brightness 170/255
         sleeping: SleepState::Awake,
         game: None,
         animation_period: 31_250, // 31,250 us = 32 FPS
@@ -244,20 +242,9 @@ fn main() -> ! {
     };
     state.debug_mode = dip1.is_low().unwrap();
     if show_startup_animation(&state) {
-        state.upcoming_frames = Some(match get_random_byte(&rosc) % 8 {
-            0 => Animation::Percentage(StartupPercentageIterator::default()),
-            1 => Animation::ZigZag(ZigZagIterator::default()),
-            2 => Animation::Gof(GameOfLifeIterator::new(GameOfLifeStartParam::Pattern1, 200)),
-            3 => Animation::Gof(GameOfLifeIterator::new(
-                GameOfLifeStartParam::BeaconToadBlinker,
-                128,
-            )),
-            4 => Animation::Gof(GameOfLifeIterator::new(GameOfLifeStartParam::Glider, 128)),
-            5 => Animation::Breathing(BreathingIterator::default()),
-            6 => Animation::Pong(PongIterator::default()),
-            7 => Animation::Snake(SnakeIterator::default()),
-            _ => unreachable!(),
-        });
+        state.upcoming_frames = Some(Animation::Plasma(PlasmaIterator::new(get_random_byte(
+            &rosc,
+        ))));
     } else {
         // If no startup animation, keep display always on
         state.grid = percentage(100);
@@ -360,7 +347,11 @@ fn main() -> ! {
         last_usb_suspended = usb_suspended;
 
         // Go to sleep after the timer has run out
-        if timer.get_counter().ticks() > sleep_timer + SLEEP_TIMEOUT && !state.debug_mode {
+        // Plasma is meant to run unattended, so it doesn't time out
+        if timer.get_counter().ticks() > sleep_timer + SLEEP_TIMEOUT
+            && !state.debug_mode
+            && !matches!(state.upcoming_frames, Some(Animation::Plasma(_)))
+        {
             sleep_reason = assign_sleep_reason(
                 last_sleep_reason,
                 sleep_reason,
@@ -471,8 +462,18 @@ fn main() -> ! {
                                 &mut led_enable,
                             );
 
-                            // If there's a very early command, cancel the startup animation
-                            state.upcoming_frames = None;
+                            // If there's a very early command, cancel the startup animation.
+                            // Plasma survives commands that don't draw.
+                            if !matches!(
+                                command,
+                                Command::SetBrightness(_)
+                                    | Command::GetBrightness
+                                    | Command::Sleep(_)
+                                    | Command::IsSleeping
+                                    | Command::Version
+                            ) {
+                                state.upcoming_frames = None;
+                            }
 
                             // Reset sleep timer when interacting with the device
                             // Very easy way to keep the device from going to sleep
